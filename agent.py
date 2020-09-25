@@ -1,4 +1,4 @@
-from .continuous_cartpole import ContinuousCartPoleEnv
+from continuous_cartpole import ContinuousCartPoleEnv
 from collections import namedtuple
 import torch
 import math
