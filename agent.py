@@ -1,4 +1,5 @@
-from scripts.continuous_cartpole import ContinuousCartPoleEnv
+from .continuous_cartpole import ContinuousCartPoleEnv
+from collections import namedtuple
 import torch
 import math
 import numpy as np
@@ -10,6 +11,52 @@ SEED = 41
 torch.manual_seed(SEED)
 np.random.seed(SEED)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+Transition = namedtuple('Transition', ('state', 'action', 'reward', 'next_state', 'done'))
+
+
+class ReplayMemory:
+    def __init__(self, capacity=10000, batch_size=32):
+        self.capacity = capacity
+        self.batch_size = batch_size
+        self.trajectories = []
+
+    def append(self, state, action, reward, next_state, done):
+        # Remove first element when capacity reached
+        if len(self.trajectories) > self.capacity:
+            self.trajectories = self.trajectories[1:self.capacity - 1]
+
+        # Convert all inputs to torch tensors
+        state = torch.FloatTensor(state).to(device)
+        action = torch.FloatTensor(action).to(device)
+        reward = torch.FloatTensor([reward]).to(device)
+        next_state = torch.FloatTensor(next_state).to(device)
+        done = torch.FloatTensor([1-int(done)]).to(device)
+
+        # Append new trajectory
+        self.trajectories.append(Transition(state, action, reward, next_state, done))
+
+    def sample_batch(self):
+        # Generate random integers in range (0, len(self.trajectories) - 1)
+        indices = torch.randint(high=len(self.trajectories) - 1, size=(self.batch_size, 1))
+
+        states = torch.empty((self.batch_size, *self.trajectories[0].state.shape))
+        actions = torch.empty((self.batch_size, *self.trajectories[0].action.shape))
+        rewards = torch.empty((self.batch_size, *self.trajectories[0].reward.shape))
+        next_states = torch.empty((self.batch_size, *self.trajectories[0].next_state.shape))
+        dones = torch.empty((self.batch_size, *self.trajectories[0].done.shape))
+
+        for k, idx in enumerate(indices):
+            states[k] = self.trajectories[idx].state
+            actions[k] = self.trajectories[idx].action
+            rewards[k] = self.trajectories[idx].reward
+            next_states[k] = self.trajectories[idx].next_state
+            dones[k] = self.trajectories[idx].done
+
+        return states, actions, rewards, next_states, dones
+
+    def __len__(self):
+        return len(self.trajectories)
 
 
 class Actor(nn.Module):
