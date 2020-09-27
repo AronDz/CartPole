@@ -1,150 +1,62 @@
 from continuous_cartpole import ContinuousCartPoleEnv
-from collections import namedtuple
 import torch
-import math
 import numpy as np
-import matplotlib.pyplot as plt
-from torch import nn
+from utils import tt, Policy, StateValueFunction, Stats
 
-LEARNING_RATE = 0.01
-SEED = 41
-torch.manual_seed(SEED)
-np.random.seed(SEED)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-Transition = namedtuple('Transition', ('state', 'action', 'reward', 'next_state', 'done'))
-
-
-class ReplayMemory:
-    def __init__(self, capacity=10000, batch_size=32):
-        self.capacity = capacity
-        self.batch_size = batch_size
-        self.trajectories = []
-
-    def append(self, state, action, reward, next_state, done):
-        # Remove first element when capacity reached
-        if len(self.trajectories) > self.capacity:
-            self.trajectories = self.trajectories[1:self.capacity - 1]
-
-        # Convert all inputs to torch tensors
-        state = torch.FloatTensor(state).to(device)
-        action = torch.FloatTensor(action).to(device)
-        reward = torch.FloatTensor([reward]).to(device)
-        next_state = torch.FloatTensor(next_state).to(device)
-        done = torch.FloatTensor([1-int(done)]).to(device)
-
-        # Append new trajectory
-        self.trajectories.append(Transition(state, action, reward, next_state, done))
-
-    def sample_batch(self):
-        # Generate random integers in range (0, len(self.trajectories) - 1)
-        indices = torch.randint(high=len(self.trajectories) - 1, size=(self.batch_size, 1))
-
-        states = torch.empty((self.batch_size, *self.trajectories[0].state.shape))
-        actions = torch.empty((self.batch_size, *self.trajectories[0].action.shape))
-        rewards = torch.empty((self.batch_size, *self.trajectories[0].reward.shape))
-        next_states = torch.empty((self.batch_size, *self.trajectories[0].next_state.shape))
-        dones = torch.empty((self.batch_size, *self.trajectories[0].done.shape))
-
-        for k, idx in enumerate(indices):
-            states[k] = self.trajectories[idx].state
-            actions[k] = self.trajectories[idx].action
-            rewards[k] = self.trajectories[idx].reward
-            next_states[k] = self.trajectories[idx].next_state
-            dones[k] = self.trajectories[idx].done
-
-        return states, actions, rewards, next_states, dones
-
-    def __len__(self):
-        return len(self.trajectories)
-
-
-class Actor(nn.Module):
-    def __init__(self, state_size, action_size):
-        super(Actor, self).__init__()
-        self.state_size = state_size
-        self.action_size = action_size
-        self.linear = nn.Linear(self.state_size, 40)
-        self.linear_2 = nn.Linear(40, 1)
-        self.softplus = nn.Softplus()
-
-    def forward(self, state):
-        output = self.linear(state)
-        output = self.linear_2(output)
-        mu = torch.tanh(output)  # map between -1 and 1
-        var = self.softplus(output) + 1e-20  # map to positive value (+1e-20 to avoid small values)
-        # Return mean and variance of predicted prob. dist.
-        return mu, var
-
-
-class Critic(nn.Module):
-    def __init__(self, state_size):
-        super(Critic, self).__init__()
-        self.state_size = state_size
-        self.linear = nn.Linear(self.state_size, 128)
-        self.linear_2 = nn.Linear(128, 1)
-
-    def forward(self, state):
-        output = self.linear(state)
-        output = self.linear_2(output)
-        return output
+LEARNING_RATE = 0.00001
+SEED = 0
 
 
 class ActorCriticAgent:
-    def __init__(self, env, batch_size=32, n_episodes=100, gamma=0.99):
+    def __init__(self, env, n_episodes=100, time_steps=500, gamma=0.99, render=False):
         self.env = env
         self.gamma = gamma
-        self.batch_size = batch_size
-        self.state_size = env.observation_space.shape[0]
-        self.action_size = env.action_space.shape[0]
+        self.time_steps = time_steps
+        self.state_dim = env.observation_space.shape[0]
+        self.action_dim = env.action_space.shape[0]
+        self.render = render
 
-        self.actor = Actor(state_size=self.state_size, action_size=self.action_size)
-        self.critic = Critic(state_size=self.state_size)
+        self.actor = Policy(state_dim=self.state_dim, action_dim=self.action_dim)
+        self.critic = StateValueFunction(state_dim=self.state_dim, action_dim=self.action_dim)
 
         self.actor_optim = torch.optim.Adam(self.actor.parameters(), lr=LEARNING_RATE)
         self.critic_optim = torch.optim.Adam(self.critic.parameters(), lr=LEARNING_RATE)
 
         self.n_episodes = n_episodes
 
-    def _calc_log_prob(self, mu_v, var_v, actions_v):
-        p1 = - ((mu_v - actions_v) ** 2) / (2 * var_v)
-        p2 = - torch.log(torch.sqrt(2 * math.pi * var_v))
-        return p1 + p2
+        self.stats = Stats()
 
     def train(self):
-        avg_episode_rewards = list()
-
         for i in range(self.n_episodes):
             state = self.env.reset()
-            values = list()
-            step_rewards = list()
+            reward_per_time_step = list()
             steps = 0
-            while True:
-                self.env.render()
-                state = torch.FloatTensor(state).to(device)
+            for _ in range(self.time_steps):
+                if self.render:
+                    self.env.render()
+                state = tt(state)
 
                 # Predict mean and variance of normal dist
-                mu, var = self.actor(state)
+                mu, sigma = self.actor(state)
                 # Predict value of current state
                 value = self.critic(state)
 
                 # Sample action from predicted normal dist
-                sigma = torch.sqrt(var).data.cpu().numpy()
-                action = np.random.normal(mu.detach().numpy(), sigma)
+                action = np.random.normal(mu.detach().numpy(), sigma.data.cpu().numpy())
                 action = np.clip(action, -1, 1)
 
                 # Do one step in env by taking the sampled action
                 next_state, reward, done, _ = self.env.step(action)
 
-                values.append(value)
-                step_rewards.append(reward)
+                reward_per_time_step.append(reward)
 
-                # Compute td-target (r + gamma * v(s') - v(s))
-                td_target = reward + self.gamma * self.critic(torch.FloatTensor(next_state)) * (1 - int(done))
+                # Compute td-target (r + gamma * v(s'))
+                td_target = reward + self.gamma * self.critic(tt(next_state)) * (1 - int(done))
                 td_error = (td_target - value).detach()
 
-                loss_actor = torch.FloatTensor(-(td_error * self._calc_log_prob(mu, var,
-                                                                                torch.FloatTensor(action).to(device))))
+                pdf = (1 / (torch.sqrt(2 * np.pi * sigma))) * torch.exp(-torch.square((tt(action) - mu) / (2 * sigma)))
+                log_pdf = torch.log(pdf)
+                loss_actor = -(log_pdf * td_error).mean()
 
                 # Optimize critic
                 loss_critic = torch.nn.functional.mse_loss(value, td_target)
@@ -161,18 +73,106 @@ class ActorCriticAgent:
                 steps += 1
                 # Break if current state is terminal state.
                 if done:
+                    avg_episode_reward = sum(reward_per_time_step) / len(reward_per_time_step)
                     print(f'Episode: {i+1}, Num. Steps: {steps}')
-                    print(f'Avg. reward: {sum(step_rewards) / len(step_rewards)}')
-                    avg_episode_rewards.append(sum(step_rewards) / len(step_rewards))
+                    print(f'Avg. reward: {avg_episode_reward}')
+                    # Update stats
+                    self.stats.update(reward=avg_episode_reward, step=steps)
                     break
-        plt.plot(avg_episode_rewards)
-        plt.show()
+
+        self.stats.plot()
+        self.env.close()
+
+
+class REINFORCEAgent:
+    def __init__(self, env, n_episodes=3000, time_steps=500, gamma=0.99, render=False):
+        self.env = env
+        self.gamma = gamma
+        self.time_steps = time_steps
+        self.state_dim = env.observation_space.shape[0]
+        self.action_dim = env.action_space.shape[0]
+        self.render = render
+
+        self.policy = Policy(state_dim=self.state_dim, action_dim=self.action_dim)
+        self.value_fct = StateValueFunction(state_dim=self.state_dim, action_dim=self.action_dim)
+
+        self.policy_optim = torch.optim.Adam(self.policy.parameters(), lr=LEARNING_RATE)
+        self.value_fct_optim = torch.optim.Adam(self.value_fct.parameters(), lr=LEARNING_RATE)
+
+        self.critic_loss_fct = torch.nn.MSELoss()
+
+        self.n_episodes = n_episodes
+
+        self.stats = Stats()
+
+    def train(self):
+        for i in range(self.n_episodes):
+            state = self.env.reset()
+            episodes = list()
+            reward_per_time_step = list()
+            steps = 0
+
+            # Generate episode
+            for _ in range(self.time_steps):
+                if self.render:
+                    self.env.render()
+                state = tt(state)
+
+                # Predict mean and variance of normal dist
+                mu, sigma = self.policy(state)
+
+                # Sample action from predicted normal dist
+                action = np.random.normal(mu.detach().numpy(), sigma.data.cpu().numpy())
+                action = np.clip(action, -1, 1)
+
+                # Do one step in env by taking the sampled action
+                next_state, reward, done, _ = self.env.step(action)
+                episodes.append((state, action, reward))
+                reward_per_time_step.append(reward)
+
+                steps += 1
+
+                if done:
+                    break
+                state = next_state
+
+            avg_episode_reward = sum(reward_per_time_step) / len(reward_per_time_step)
+            print(f'Episode: {i + 1}, Num. Steps: {steps}')
+            print(f'Avg. reward: {avg_episode_reward}')
+
+            # Update stats
+            self.stats.update(reward=avg_episode_reward, step=steps)
+
+            # Learn from episode
+            for t in range(len(episodes)):
+                state, action, reward = episodes[t]
+                G = tt(np.array([sum([e[2]*(self.gamma**i) for i, e in enumerate(episodes[t:])])]))
+
+                # Optimize critic
+                loss_critic = self.critic_loss_fct(self.value_fct(state), G)
+                self.value_fct_optim.zero_grad()
+                loss_critic.backward()
+                self.value_fct_optim.step()
+
+                mu, sigma = self.policy(state)
+
+                # Compute log prob. density function
+                pdf = (1 / (torch.sqrt(2 * np.pi * sigma))) * torch.exp(-torch.square((tt(action) - mu) / (2 * sigma)))
+                log_pdf = torch.log(pdf)
+                loss_policy = -(log_pdf * (G - self.value_fct(state))).mean()
+                # Optimize actor
+                self.policy_optim.zero_grad()
+                loss_policy.backward()
+                self.policy_optim.step()
+
+        self.stats.plot()
         self.env.close()
 
 
 if __name__ == '__main__':
     env = ContinuousCartPoleEnv()
     env.seed(seed=SEED)
-    n_episodes = 500
-    agent = ActorCriticAgent(env=env, n_episodes=n_episodes, gamma=0.99)
+    n_episodes = 3000
+    # agent = ActorCriticAgent(env=env, n_episodes=n_episodes, gamma=0.99)
+    agent = REINFORCEAgent(env=env, n_episodes=n_episodes, gamma=0.99, render=False)
     agent.train()
