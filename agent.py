@@ -36,7 +36,7 @@ class ActorCriticAgent:
                     self.env.render()
                 state = tt(state)
 
-                # Predict mean and variance of normal dist
+                # Predict mean and std of normal dist
                 mu, sigma = self.actor(state)
                 # Predict value of current state
                 value = self.critic(state)
@@ -118,7 +118,7 @@ class REINFORCEAgent:
                     self.env.render()
                 state = tt(state)
 
-                # Predict mean and variance of normal dist
+                # Predict mean and std of normal dist
                 mu, sigma = self.policy(state)
 
                 # Sample action from predicted normal dist
