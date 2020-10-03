@@ -1,6 +1,6 @@
 import math
 import gym
-from gym import spaces, logger
+from gym import spaces
 from gym.utils import seeding
 import numpy as np
 
@@ -42,26 +42,10 @@ class ContinuousCartPoleEnv(gym.Env):
 
         self.steps_beyond_done = None
 
-        # if reward_function is None:
-        #     def reward(cart_pole):
-        #         if cart_pole.state[0] < -self.x_threshold or cart_pole.state[0] > self.x_threshold:
-        #           return -50
-        #         if 0 <= math.fabs(angle_normalize(cart_pole.state[2])) <= 0.1:
-        #             return 100
-        #         elif 0.1 < math.fabs(angle_normalize(cart_pole.state[2])) <= 1:
-        #             return 50
-        #         elif 1 < math.fabs(angle_normalize(cart_pole.state[2])) <= 2:
-        #             return 0
-        #         else:
-        #             return -25
-        #     self.reward = reward
-        # else:
-        #     self.reward = reward_function
-
         if reward_function is None:
             def reward(cart_pole):
                 if cart_pole.state[0] < -self.x_threshold or cart_pole.state[0] > self.x_threshold:
-                  return -1
+                    return -1
                 return 1 if -0.1 <= angle_normalize(cart_pole.state[2]) <= 0.1 else 0
             self.reward = reward
         else:
