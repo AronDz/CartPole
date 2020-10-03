@@ -2,9 +2,7 @@ import torch
 import numpy as np
 from CartPole.utils import reward
 from CartPole.continuous_cartpole import ContinuousCartPoleEnv
-from CartPole.ac.agent import ActorCriticAgent
 from CartPole.ddpg.agent import DDPGAgent
-from CartPole.reinforce.agent import REINFORCEAgent
 from CartPole.td3.agent import TD3Agent
 
 SEED = 0
@@ -27,10 +25,6 @@ if __name__ == '__main__':
         memory_capacity = 1000000
         agent = DDPGAgent(env=env, n_episodes=n_episodes, time_steps=time_steps, gamma=gamma, batch_size=batch_size,
                           memory_capacity=memory_capacity, tau=tau, lr=lr, render=render)
-    elif alg == 'ac':
-        agent = ActorCriticAgent(env=env, n_episodes=n_episodes, gamma=gamma, render=render)
-    elif alg == 'reinforce':
-        agent = REINFORCEAgent(env=env, n_episodes=n_episodes, gamma=gamma, render=render)
     elif alg == 'td3':
         lr = 0.0001
         tau = 0.001
