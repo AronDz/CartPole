@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import pandas as pd
 from .net import Actor, Critic
-from ..utils import tt, ReplayMemory, logging
+from utils import tt, ReplayMemory, logging
 
 
 class TD3Agent:
@@ -20,12 +20,14 @@ class TD3Agent:
         self.pi_update_steps = pi_update_steps
         self.render = render
 
-        # Create actor and critic network
-        self.actor = Actor(state_dim=self.state_dim, action_dim=self.action_dim)
-        self.actor_target = Actor(state_dim=self.state_dim, action_dim=self.action_dim)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.critic = Critic(state_dim=self.state_dim, action_dim=self.action_dim)
-        self.critic_target = Critic(state_dim=self.state_dim, action_dim=self.action_dim)
+        # Create actor and critic network
+        self.actor = Actor(state_dim=self.state_dim, action_dim=self.action_dim).to(self.device)
+        self.actor_target = Actor(state_dim=self.state_dim, action_dim=self.action_dim).to(self.device)
+
+        self.critic = Critic(state_dim=self.state_dim, action_dim=self.action_dim).to(self.device)
+        self.critic_target = Critic(state_dim=self.state_dim, action_dim=self.action_dim).to(self.device)
 
         # Same weights for target network as for original network
         for target_param, param in zip(self.actor_target.parameters(), self.actor.parameters()):
@@ -59,7 +61,7 @@ class TD3Agent:
                     self.env.render()
 
                 state = tt(state)
-                action = self.actor(state).detach().numpy()
+                action = self.actor(state).cpu().detach().numpy()
 
                 noise = np.random.normal(0, 0.1, size=self.env.action_space.shape[0])
                 action = np.clip(action + noise, self.env.action_space.low[0], self.env.action_space.high[0])
@@ -85,7 +87,7 @@ class TD3Agent:
                 q1, q2 = self.critic(states, actions)
                 next_actions = self.actor_target(next_states)
 
-                noise = torch.FloatTensor(actions).data.normal_(0, 0.2)
+                noise = tt(torch.Tensor(actions.cpu()).data.normal_(0, 0.2))
                 noise = noise.clamp(-0.5, 0.5)
                 next_actions = (next_actions + noise).clamp(self.env.action_space.low[0], self.env.action_space.high[0])
                 # Get next state q values by Clipped Double Q-Learning
