@@ -68,7 +68,7 @@ class DDPGAgent:
                 next_state, reward, done, _ = self.env.step(action)
 
                 res = {'episodes': i + 1,
-                       'states': state,
+                       'states': state.tolist(),
                        'rewards': reward,
                        'steps': step + 1}
 
