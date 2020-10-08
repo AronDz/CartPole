@@ -1,6 +1,5 @@
 import torch
 import math
-import matplotlib.pyplot as plt
 import numpy as np
 import logging
 from torch.autograd import Variable
@@ -84,50 +83,3 @@ class ReplayMemory:
 
     def __len__(self):
         return len(self.trajectories)
-
-
-class Stats:
-    def __init__(self, name, win_size=10):
-        self.rewards_per_episode = list()
-        self.steps_per_episode = list()
-        self.angle = list()
-        self.name = name
-
-        self.win_size = win_size
-
-    def update(self, reward, step, angle):
-        self.rewards_per_episode.append(reward)
-        self.steps_per_episode.append(step)
-        self.angle.append(angle)
-
-    def plot(self):
-        smoothed_rewards = list()
-        for i in range(len(self.rewards_per_episode) - self.win_size):
-            smoothed_rewards.append(np.mean(self.rewards_per_episode[i: i + self.win_size - 1]))
-        fig1 = plt.figure(figsize=(10, 5))
-        plt.plot(smoothed_rewards)
-        plt.xlabel("Episode")
-        plt.ylabel("Episode Length")
-        plt.title(f"Episode Reward over Time (Smoothed over window size {self.win_size})")
-        fig1.savefig(f'results/{self.name}_smoothed_reward.png')
-
-        fig2 = plt.figure(figsize=(10, 5))
-        plt.plot(self.rewards_per_episode)
-        plt.xlabel("Episode")
-        plt.ylabel("Episode Length")
-        plt.title("Episode Reward over Time")
-        fig2.savefig(f'results/{self.name}_reward.png')
-
-        fig3 = plt.figure(figsize=(10, 5))
-        plt.plot(self.steps_per_episode)
-        plt.xlabel("Episode")
-        plt.ylabel("Number of Steps")
-        plt.title("Steps in each Episode")
-        fig3.savefig(f'results/{self.name}_steps.png')
-
-        fig4 = plt.figure(figsize=(10, 5))
-        plt.plot(self.angle)
-        plt.xlabel("Episode")
-        plt.ylabel("Number of Times Steps where Angle between 0 and 0.1")
-        plt.title("Number of Times where Angle is between 0 and 0.1")
-        fig4.savefig(f'results/{self.name}_angle.png')
