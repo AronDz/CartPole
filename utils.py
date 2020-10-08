@@ -7,14 +7,9 @@ from torch.autograd import Variable
 from collections import namedtuple
 from CartPole.continuous_cartpole import angle_normalize
 
-SEED = 0
-torch.manual_seed(SEED)
-np.random.seed(SEED)
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 Transition = namedtuple('Transition', ('state', 'action', 'reward', 'next_state', 'done'))
 
-logging.basicConfig(filename='td3.log', level=logging.DEBUG)
+logging.basicConfig(filename='results/logfile.log', filemode='w', level=logging.INFO)
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
 logging.getLogger('').addHandler(console)
@@ -24,7 +19,7 @@ def tt(array):
     if isinstance(array, torch.Tensor):
         return array
     elif isinstance(array, np.ndarray):
-        return Variable(torch.from_numpy(array).float().to(DEVICE), requires_grad=False)
+        return Variable(torch.from_numpy(array).float(), requires_grad=False)
     else:
         raise ValueError(f'Given array must be from type torch.Tensor or np.ndarray but is {type(array)}')
 
@@ -58,11 +53,11 @@ class ReplayMemory:
             self.trajectories = self.trajectories[1:self.capacity - 1]
 
         # Convert all inputs to torch tensors
-        state = torch.FloatTensor(state).to(DEVICE)
-        action = torch.FloatTensor(action).to(DEVICE)
-        reward = torch.FloatTensor([reward]).to(DEVICE)
-        next_state = torch.FloatTensor(next_state).to(DEVICE)
-        done = torch.FloatTensor([1-int(done)]).to(DEVICE)
+        state = torch.FloatTensor(state)
+        action = torch.FloatTensor(action)
+        reward = torch.FloatTensor([reward])
+        next_state = torch.FloatTensor(next_state)
+        done = torch.FloatTensor([1-int(done)])
 
         # Append new trajectory
         self.trajectories.append(Transition(state, action, reward, next_state, done))
@@ -113,25 +108,25 @@ class Stats:
         plt.xlabel("Episode")
         plt.ylabel("Episode Length")
         plt.title(f"Episode Reward over Time (Smoothed over window size {self.win_size})")
-        fig1.savefig(f'{self.name}_smoothed_reward.png')
+        fig1.savefig(f'results/{self.name}_smoothed_reward.png')
 
         fig2 = plt.figure(figsize=(10, 5))
         plt.plot(self.rewards_per_episode)
         plt.xlabel("Episode")
         plt.ylabel("Episode Length")
         plt.title("Episode Reward over Time")
-        fig2.savefig(f'{self.name}_reward.png')
+        fig2.savefig(f'results/{self.name}_reward.png')
 
         fig3 = plt.figure(figsize=(10, 5))
         plt.plot(self.steps_per_episode)
         plt.xlabel("Episode")
         plt.ylabel("Number of Steps")
         plt.title("Steps in each Episode")
-        fig3.savefig(f'{self.name}_steps.png')
+        fig3.savefig(f'results/{self.name}_steps.png')
 
         fig4 = plt.figure(figsize=(10, 5))
         plt.plot(self.angle)
         plt.xlabel("Episode")
         plt.ylabel("Number of Times Steps where Angle between 0 and 0.1")
         plt.title("Number of Times where Angle is between 0 and 0.1")
-        fig4.savefig(f'{self.name}_angle.png')
+        fig4.savefig(f'results/{self.name}_angle.png')

@@ -1,9 +1,8 @@
 import torch
-import math
+import pandas as pd
 import numpy as np
 from .net import Actor, Critic
-from ..utils import tt, Stats, ReplayMemory, logging
-from CartPole.continuous_cartpole import angle_normalize
+from ..utils import tt, ReplayMemory, logging
 
 
 class DDPGAgent:
@@ -42,12 +41,15 @@ class DDPGAgent:
 
         self.replay_memory = ReplayMemory(capacity=self.memory_capacity, batch_size=batch_size)
 
-        self.stats = Stats(name='DDPG')
+        self.res = pd.DataFrame({
+                'episodes': [],
+                'states': [],
+                'rewards': [],
+                'steps': []
+                 })
 
     def train(self):
         for i in range(self.n_episodes):
-            reward_per_time_step = list()
-            angle = 0
             steps = 0
             state = self.env.reset()
 
@@ -65,8 +67,10 @@ class DDPGAgent:
                 # Do one step in env
                 next_state, reward, done, _ = self.env.step(action)
 
-                if 0 <= math.fabs(angle_normalize(state[2])) <= 0.1:
-                    angle += 1
+                res = {'episodes': i + 1,
+                       'states': state,
+                       'rewards': reward,
+                       'steps': step + 1}
 
                 # Save step in memory
                 self.replay_memory.append(state=state, action=action, reward=reward, next_state=next_state, done=done)
@@ -105,19 +109,17 @@ class DDPGAgent:
                 for target_param, param in zip(self.critic_target.parameters(), self.critic.parameters()):
                     target_param.data.copy_(param.data * self.tau + target_param.data * (1.0 - self.tau))
 
+                self.res = self.res.append([res])
+
                 state = next_state
-                reward_per_time_step.append(reward)
                 steps += 1
 
                 if done:
                     break
 
-            avg_episode_reward = sum(reward_per_time_step) / len(reward_per_time_step)
             logging.info(f'Episode {i + 1}:')
-            logging.info(f'\t Steps: {steps}')
-            logging.info(f'\t Reward: {sum(reward_per_time_step)}')
-            # Update stats
-            self.stats.update(reward=sum(reward_per_time_step), step=steps, angle=angle)
+            logging.info(f'\t Steps: {self.res.loc[self.res["episodes"] == i + 1]["steps"].max()}')
+            logging.info(f'\t Reward: {self.res.loc[self.res["episodes"] == i + 1]["rewards"].sum()}')
 
-        self.stats.plot()
         self.env.close()
+        return self.res

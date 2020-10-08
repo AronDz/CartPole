@@ -1,9 +1,8 @@
 import torch
 import numpy as np
-import math
+import pandas as pd
 from .net import Actor, Critic
-from ..utils import tt, Stats, ReplayMemory, logging
-from CartPole.continuous_cartpole import angle_normalize
+from ..utils import tt, ReplayMemory, logging
 
 
 class TD3Agent:
@@ -41,13 +40,18 @@ class TD3Agent:
 
         self.n_episodes = n_episodes
         self.replay_memory = ReplayMemory(capacity=self.memory_capacity, batch_size=batch_size)
-        self.stats = Stats(name='TD3')
+
+        self.res = pd.DataFrame({
+                'episodes': [],
+                'states': [],
+                'rewards': [],
+                'steps': [],
+                'actor_losses': [],
+                'critic_losses': [],
+                 })
 
     def train(self):
         for i in range(self.n_episodes):
-            reward_per_time_step = list()
-            angle = 0
-            steps = 0
             state = self.env.reset()
 
             for step in range(self.time_steps):
@@ -58,17 +62,20 @@ class TD3Agent:
                 action = self.actor(state).detach().numpy()
 
                 noise = np.random.normal(0, 0.1, size=self.env.action_space.shape[0])
-                action = np.clip(action + noise, self.env.action_space.low, self.env.action_space.high)
+                action = np.clip(action + noise, self.env.action_space.low[0], self.env.action_space.high[0])
                 next_state, reward, done, _ = self.env.step(action)
-
-                if 0 <= math.fabs(angle_normalize(state[2])) <= 0.1:
-                    angle += 1
 
                 # Save step in memory
                 self.replay_memory.append(state=state, action=action, reward=reward, next_state=next_state, done=done)
 
+                res = {'episodes': i + 1,
+                       'states': state.tolist(),
+                       'rewards': reward,
+                       'steps': step + 1}
+
                 # Start training, if batch size reached
                 if len(self.replay_memory) < self.batch_size:
+                    self.res = self.res.append([res])
                     continue
 
                 # Sample batch from memory
@@ -80,13 +87,14 @@ class TD3Agent:
 
                 noise = torch.FloatTensor(actions).data.normal_(0, 0.2)
                 noise = noise.clamp(-0.5, 0.5)
-                next_actions = (next_actions + noise).clamp(-1, 1)
+                next_actions = (next_actions + noise).clamp(self.env.action_space.low[0], self.env.action_space.high[0])
                 # Get next state q values by Clipped Double Q-Learning
                 q1_ns,  q2_ns = self.critic_target(next_states, next_actions.detach())
                 q_ns = torch.min(q1_ns, q2_ns)
                 td_target = rewards + self.gamma * q_ns
 
                 loss_critic = self.critic_loss_fct(q1, td_target) + self.critic_loss_fct(q2, td_target)
+                res['critic_losses'] = float(loss_critic)
 
                 # Optimize critic
                 self.critic_optim.zero_grad()
@@ -98,6 +106,8 @@ class TD3Agent:
                     q1, _ = self.critic(states, self.actor(states))
                     # Actor loss
                     loss_actor = -q1.mean()
+                    res['actor_losses'] = float(loss_actor)
+
                     # Optimize actor
                     self.actor_optim.zero_grad()
                     loss_actor.backward()
@@ -110,18 +120,14 @@ class TD3Agent:
                     for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
                         target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
+                self.res = self.res.append([res])
                 state = next_state
-                reward_per_time_step.append(reward)
-                steps += 1
-
                 if done:
                     break
 
             logging.info(f'Episode {i + 1}:')
-            logging.info(f'\t Steps: {steps}')
-            logging.info(f'\t Reward: {sum(reward_per_time_step)}')
-            # Update stats
-            self.stats.update(reward=sum(reward_per_time_step), step=steps, angle=angle)
+            logging.info(f'\t Steps: {self.res.loc[self.res["episodes"] == i + 1]["steps"].max()}')
+            logging.info(f'\t Reward: {self.res.loc[self.res["episodes"] == i + 1]["rewards"].sum()}')
 
-        self.stats.plot()
         self.env.close()
+        return self.res
