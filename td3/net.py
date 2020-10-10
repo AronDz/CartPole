@@ -12,6 +12,7 @@ class Actor(nn.Module):
         self.non_linearity = F.relu
         self.tanh = torch.tanh
 
+
     def forward(self, state):
         output = self.non_linearity(self.fc1(state))
         output = self.non_linearity(self.fc2(output))
@@ -34,6 +35,7 @@ class Critic(nn.Module):
         self.fc6 = nn.Linear(hidden_dim, action_dim)
 
         self.non_linearity = F.relu
+        
 
     def forward(self, state, action):
         input = torch.cat((state, action), dim=1)

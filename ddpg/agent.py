@@ -2,7 +2,7 @@ import torch
 import pandas as pd
 import numpy as np
 from .net import Actor, Critic
-from ..utils import tt, ReplayMemory, logging
+from utils import tt, ReplayMemory, logging
 
 
 class DDPGAgent:
