@@ -9,9 +9,7 @@ from continuous_cartpole import angle_normalize
 Transition = namedtuple('Transition', ('state', 'action', 'reward', 'next_state', 'done'))
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-console = logging.StreamHandler()
-console.setLevel(logging.INFO)
-logging.getLogger('').addHandler(console)
+logging.basicConfig(level=logging.INFO)
 
 
 def tt(array):
@@ -38,6 +36,7 @@ def reward(cart_pole):
         return 0.1
     else:
         return 0
+
 
 class ReplayMemory:
     def __init__(self, capacity=100000, batch_size=64):
