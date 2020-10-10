@@ -9,7 +9,6 @@ from continuous_cartpole import angle_normalize
 Transition = namedtuple('Transition', ('state', 'action', 'reward', 'next_state', 'done'))
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-logging.basicConfig(filename='logfile.log', filemode='w', level=logging.INFO)
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
 logging.getLogger('').addHandler(console)
