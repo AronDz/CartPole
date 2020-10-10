@@ -39,7 +39,6 @@ def reward(cart_pole):
     else:
         return 0
 
-
 class ReplayMemory:
     def __init__(self, capacity=100000, batch_size=64):
         self.capacity = capacity
@@ -50,7 +49,6 @@ class ReplayMemory:
         # Remove first element when capacity reached
         if len(self.trajectories) > self.capacity:
             self.trajectories = self.trajectories[1:self.capacity - 1]
-
         # Convert all inputs to torch tensors
         state = tt(state)
         action = tt(action)

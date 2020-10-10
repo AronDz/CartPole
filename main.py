@@ -1,18 +1,19 @@
 import torch
 import numpy as np
-from CartPole.utils import reward
-from CartPole.continuous_cartpole import ContinuousCartPoleEnv
-from CartPole.ddpg.agent import DDPGAgent
-from CartPole.td3.agent import TD3Agent
+from utils import reward
+from continuous_cartpole import ContinuousCartPoleEnv
+from ddpg.agent import DDPGAgent
+from td3.agent import TD3Agent
 
 SEED = 0
+torch.cuda.manual_seed_all(SEED)
 torch.manual_seed(SEED)
 np.random.seed(SEED)
 
 if __name__ == '__main__':
     env = ContinuousCartPoleEnv(reward_function=reward)
     env.seed(seed=SEED)
-    n_episodes = 2000
+    n_episodes = 3000
     time_steps = 500
 
     lr = 0.0001
@@ -21,7 +22,7 @@ if __name__ == '__main__':
     gamma = 0.99
     batch_size = 64
     render = False
-    method = 'ddpg'
+    method = 'td3'
     if method == 'ddpg':
         agent = DDPGAgent(env=env, n_episodes=n_episodes, time_steps=time_steps, gamma=gamma, batch_size=batch_size,
                           memory_capacity=memory_capacity, tau=tau, lr=lr, render=render)
@@ -34,4 +35,4 @@ if __name__ == '__main__':
         raise ValueError(f'agent must be ddpg or td3 but is {method}')
 
     res = agent.train()
-    res.to_csv(f'{method}_res.csv')
+    res.to_csv(f'{method}_SEED{SEED}_res.csv')
