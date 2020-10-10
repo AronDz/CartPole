@@ -5,7 +5,7 @@ from continuous_cartpole import ContinuousCartPoleEnv
 from ddpg.agent import DDPGAgent
 from td3.agent import TD3Agent
 
-SEED = 5
+SEED = 0
 torch.cuda.manual_seed_all(SEED)
 torch.manual_seed(SEED)
 np.random.seed(SEED)
